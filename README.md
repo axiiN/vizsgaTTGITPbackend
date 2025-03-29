@@ -1,6 +1,6 @@
 # Life Tracker API
 
-A RESTful API for tracking habits and tasks, built with Node.js, Express, Firebase Realtime Database, and Firebase Authentication.
+A RESTful API for tracking habits, tasks, and notes, built with Node.js, Express, Firebase Realtime Database, and Firebase Authentication.
 
 ## Features
 
@@ -11,7 +11,8 @@ A RESTful API for tracking habits and tasks, built with Node.js, Express, Fireba
 - Firebase Realtime Database integration
 - Firebase Authentication
 - User-specific data isolation
-- Habits & Tasks API endpoints
+- Habits, Tasks & Notes API endpoints
+- Email notifications
 - Error handling middleware
 
 ## Project Structure
@@ -26,10 +27,15 @@ A RESTful API for tracking habits and tasks, built with Node.js, Express, Fireba
 │   └── auth.js         # Authentication middleware
 ├── models/             # Database models
 │   ├── habitModel.js   # Habit model for database operations
-│   └── taskModel.js    # Task model for database operations
+│   ├── taskModel.js    # Task model for database operations
+│   └── noteModel.js    # Note model for database operations
 ├── routes/             # Route files
 │   ├── habits.js       # Habits resource routes
-│   └── tasks.js        # Tasks resource routes
+│   ├── tasks.js        # Tasks resource routes
+│   ├── notes.js        # Notes resource routes
+│   └── users.js        # User management routes
+├── utils/              # Utility functions
+│   └── emailService.js # Email service utilities
 ├── index.js            # Main application file
 ├── package.json        # Project dependencies and scripts
 ├── .env                # Environment variables
@@ -111,7 +117,7 @@ Returns a welcome message to confirm the API is running, along with a list of av
 
 ### Authentication Header
 
-All habits and tasks endpoints require Firebase authentication. You need to include an `Authorization` header with a valid Firebase ID token:
+All endpoints require Firebase authentication. You need to include an `Authorization` header with a valid Firebase ID token:
 
 ```
 Authorization: Bearer <firebase-id-token>
@@ -230,6 +236,93 @@ PATCH /tasks/:id/toggle
 
 Toggles the completion status of a task for the authenticated user.
 
+### Notes Endpoints
+
+```
+GET /notes
+```
+
+Returns all notes for the authenticated user.
+
+```
+GET /notes/favorites
+```
+
+Returns all favorite notes for the authenticated user.
+
+```
+GET /notes/:id
+```
+
+Returns a specific note by ID for the authenticated user.
+
+```
+POST /notes
+```
+
+Creates a new note for the authenticated user. Required fields in the request body:
+- title
+
+Optional fields:
+- content (defaults to empty string)
+- isFavorite (defaults to false)
+
+```
+PUT /notes/:id
+```
+
+Updates a note for the authenticated user. All fields are optional:
+- title
+- content
+- isFavorite
+
+```
+DELETE /notes/:id
+```
+
+Deletes a note for the authenticated user.
+
+```
+PATCH /notes/:id/toggle-favorite
+```
+
+Toggles the favorite status of a note for the authenticated user.
+
+### User Endpoints
+
+```
+GET /users/me
+```
+
+Returns information about the currently authenticated user.
+
+```
+POST /users/welcome-email
+```
+
+Sends a welcome email to a newly registered user. Required fields in the request body:
+- email
+
+Optional fields:
+- name (defaults to the email address if not provided)
+
+Example request body:
+```json
+{
+  "email": "user@example.com",
+  "name": "John Doe"
+}
+```
+
+Example response:
+```json
+{
+  "message": "Welcome email sent successfully",
+  "success": true,
+  "messageId": "message-id-here"
+}
+```
+
 ## Testing the API
 
 You can use tools like Postman, Insomnia, or curl to test the API endpoints.
@@ -264,6 +357,29 @@ curl -X POST http://localhost:3000/tasks \
 # Toggle task completion
 curl -X PATCH http://localhost:3000/tasks/1/toggle \
   -H "Authorization: Bearer development-token"
+
+# Get all notes
+curl http://localhost:3000/notes \
+  -H "Authorization: Bearer development-token"
+
+# Get favorite notes
+curl http://localhost:3000/notes/favorites \
+  -H "Authorization: Bearer development-token"
+
+# Create a new note
+curl -X POST http://localhost:3000/notes \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer development-token" \
+  -d '{"title": "Important Note", "content": "This is the content of my note", "isFavorite": true}'
+
+# Toggle note favorite status
+curl -X PATCH http://localhost:3000/notes/note1/toggle-favorite \
+  -H "Authorization: Bearer development-token"
+
+# Send a welcome email
+curl -X POST http://localhost:3000/users/welcome-email \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "name": "John Doe"}'
 ```
 
 ## Authentication Flow
@@ -287,9 +403,9 @@ The application uses the following database structure:
       "description": "10 minutes of mindfulness",
       "frequency": "daily",
       "completed": false,
-      "user_id": "user123",
-      "created_at": "2023-01-01T12:00:00Z",
-      "updated_at": "2023-01-01T12:00:00Z"
+      "userId": "user123",
+      "createdAt": "2023-01-01T12:00:00Z",
+      "updatedAt": "2023-01-01T12:00:00Z"
     },
     "habit2": { ... }
   },
@@ -297,19 +413,30 @@ The application uses the following database structure:
     "task1": {
       "name": "Complete project proposal",
       "category": "Work",
-      "due_date": "2023-12-31T00:00:00Z",
+      "dueDate": "2023-12-31T00:00:00Z",
       "priority": "high",
       "completed": false,
-      "user_id": "user123",
-      "created_at": "2023-01-01T12:00:00Z",
-      "updated_at": "2023-01-01T12:00:00Z"
+      "userId": "user123",
+      "createdAt": "2023-01-01T12:00:00Z",
+      "updatedAt": "2023-01-01T12:00:00Z"
     },
     "task2": { ... }
+  },
+  "notes": {
+    "note1": {
+      "title": "Project Ideas",
+      "content": "List of ideas for the next quarter",
+      "isFavorite": true,
+      "userId": "user123",
+      "createdAt": "2023-01-01T12:00:00Z",
+      "updatedAt": "2023-01-01T12:00:00Z"
+    },
+    "note2": { ... }
   }
 }
 ```
 
-Each user can only access their own data, enforced through user_id filtering in the API layer.
+Each user can only access their own data, enforced through userId filtering in the API layer.
 
 ## Troubleshooting
 
@@ -341,4 +468,94 @@ If you encounter "Invalid PEM formatted message" errors:
 
 ## CORS Configuration
 
-This API has CORS enabled for all routes with default settings. If you need to customize the CORS configuration, you can modify the options in `index.js`. 
+This API has CORS enabled for all routes with default settings. If you need to customize the CORS configuration, you can modify the options in `index.js`.
+
+## Email Configuration
+
+The application uses Nodemailer for sending emails. You'll need to set up the following environment variables in your `.env` file:
+
+```
+EMAIL_HOST=smtp.example.com
+EMAIL_PORT=587
+EMAIL_SECURE=false
+EMAIL_USER=user@example.com
+EMAIL_PASSWORD=password123
+EMAIL_FROM=Life Tracker <no-reply@lifetracker.example.com>
+```
+
+Unlike previous versions that only logged emails in development mode, the application now sends actual emails in all environments. For Gmail users, make sure to:
+
+1. Enable "Less secure app access" or
+2. Use an App Password if you have 2-Factor Authentication enabled (recommended)
+
+> Note: For Gmail, use the following settings:
+> - EMAIL_HOST=smtp.gmail.com
+> - EMAIL_PORT=587
+> - EMAIL_SECURE=false
+
+### Setting Up Gmail for Email Sending
+
+To use Gmail as your email provider, follow these steps:
+
+1. **Create or use an existing Gmail account**:
+   - It's recommended to create a dedicated Gmail account for your application rather than using your personal email
+
+2. **Set up an App Password (if you have 2FA enabled - recommended)**:
+   - Go to your [Google Account settings](https://myaccount.google.com/)
+   - Navigate to Security > 2-Step Verification
+   - Scroll down and click on "App passwords"
+   - Select "Mail" as the app and "Other" as the device (give it a name like "Life Tracker API")
+   - Click "Generate" 
+   - Copy the 16-character password that appears
+   - Use this password in your .env file as EMAIL_PASSWORD (not your regular Gmail password)
+
+3. **If you don't use 2FA, enable Less Secure App Access**:
+   - Go to your [Google Account settings](https://myaccount.google.com/)
+   - Navigate to Security
+   - Scroll down to "Less secure app access" and turn it on
+   - Note: Google may disable this option in the future as it's less secure
+
+4. **Update your .env file with Gmail settings**:
+   ```
+   # Email configuration for Gmail
+   EMAIL_HOST=smtp.gmail.com
+   EMAIL_PORT=587
+   EMAIL_SECURE=false
+   EMAIL_USER=your-email@gmail.com
+   EMAIL_PASSWORD=your-app-password-or-gmail-password
+   EMAIL_FROM=Life Tracker <your-email@gmail.com>
+   ```
+
+5. **Test your email configuration**:
+   - Start your server: `npm run dev`
+   - Send a test email using the API endpoint:
+   ```bash
+   curl -X GET "http://localhost:3000/users/test-email?email=recipient@example.com"
+   ```
+   - Or test through the welcome email endpoint:
+   ```bash
+   curl -X POST http://localhost:3000/users/welcome-email \
+     -H "Content-Type: application/json" \
+     -d '{"email": "recipient@example.com", "name": "Test User"}'
+   ```
+
+6. **Troubleshooting Gmail Connection Issues**:
+   - Make sure you're using the correct port (587) and secure setting (false)
+   - Check that your app password is entered correctly (no spaces)
+   - Verify that "Less secure app access" is enabled if you're not using an app password
+   - Check the server logs for detailed error messages
+   - Ensure your Gmail account doesn't have any security blocks or captchas pending
+
+### Email Debugging
+
+In development mode, email details are logged to the console for debugging purposes in addition to sending the actual email. This helps with troubleshooting while still testing the full email sending functionality.
+
+The application includes a dedicated test endpoint for verifying email configuration:
+
+```
+GET /users/test-email
+```
+
+This endpoint is only available in development mode and will send a test email to:
+- The email address specified in the query parameter: `?email=test@example.com` 
+- The EMAIL_USER address from your .env file if no query parameter is provided 

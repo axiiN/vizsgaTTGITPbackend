@@ -24,6 +24,8 @@ const { initializeDatabase, seedDatabase } = require('./db/initDb');
 // Import routes
 const habitsRoutes = require('./routes/habits');
 const tasksRoutes = require('./routes/tasks');
+const notesRoutes = require('./routes/notes');
+const usersRoutes = require('./routes/users');
 
 // Create Express app
 const app = express();
@@ -45,7 +47,9 @@ app.get('/', (req, res) => {
     description: 'Track your habits and tasks to improve your daily life',
     endpoints: [
       { path: '/habits', description: 'Manage your daily and weekly habits' },
-      { path: '/tasks', description: 'Manage your tasks and to-dos' }
+      { path: '/tasks', description: 'Manage your tasks and to-dos' },
+      { path: '/notes', description: 'Manage your notes and capture your thoughts' },
+      { path: '/users', description: 'User management and profile operations' }
     ]
   });
 });
@@ -53,6 +57,8 @@ app.get('/', (req, res) => {
 // Routes without /api prefix
 app.use('/habits', habitsRoutes);
 app.use('/tasks', tasksRoutes);
+app.use('/notes', notesRoutes);
+app.use('/users', usersRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
