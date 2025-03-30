@@ -24,6 +24,22 @@ async function getAllHabits(userId) {
 }
 
 /**
+ * Get habits by category for a specific user
+ * @param {string} category - The category
+ * @param {string} userId - The user ID
+ * @returns {Promise<Array>} Array of habits
+ */
+async function getHabitsByCategory(category, userId) {
+  try {
+    const allHabits = await getAllHabits(userId);
+    return allHabits.filter(habit => habit.category === category);
+  } catch (error) {
+    console.error('Error getting habits by category:', error);
+    throw error;
+  }
+}
+
+/**
  * Get a specific habit by ID for a specific user
  * @param {string} id - The habit ID
  * @param {string} userId - The user ID
@@ -59,6 +75,9 @@ async function createHabit(habit, userId) {
     const habitWithUser = {
       ...habit,
       userId: userId,
+      category: habit.category || 'General', // Default category if not provided
+      streak: 0, // Initialize streak at 0
+      lastCompletedAt: null, // Track when the habit was last completed
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -130,34 +149,68 @@ async function deleteHabit(id, userId) {
 }
 
 /**
- * Toggle the completion status of a habit for a specific user
+ * Increment the streak counter for a habit
  * @param {string} id - The habit ID
  * @param {string} userId - The user ID
  * @returns {Promise<Object|null>} The updated habit or null if not found
  */
-async function toggleHabitCompletion(id, userId) {
+async function incrementHabitStreak(id, userId) {
   try {
     const habit = await getHabitById(id, userId);
     if (!habit) {
       return null;
     }
     
+    // Calculate the current streak
+    const currentStreak = habit.streak || 0;
+    const newStreak = currentStreak + 1;
+    
+    // Update the habit with the new streak count and completion timestamp
     const updatedHabit = await updateHabit(id, {
-      completed: !habit.completed
+      streak: newStreak,
+      lastCompletedAt: new Date().toISOString()
     }, userId);
     
     return updatedHabit;
   } catch (error) {
-    console.error('Error toggling habit completion:', error);
+    console.error('Error incrementing habit streak:', error);
+    throw error;
+  }
+}
+
+/**
+ * Reset the streak counter for a habit back to 0
+ * @param {string} id - The habit ID
+ * @param {string} userId - The user ID
+ * @returns {Promise<Object|null>} The updated habit or null if not found
+ */
+async function resetHabitStreak(id, userId) {
+  try {
+    const habit = await getHabitById(id, userId);
+    if (!habit) {
+      return null;
+    }
+    
+    // Reset streak to 0 and clear lastCompletedAt
+    const updatedHabit = await updateHabit(id, {
+      streak: 0,
+      lastCompletedAt: null
+    }, userId);
+    
+    return updatedHabit;
+  } catch (error) {
+    console.error('Error resetting habit streak:', error);
     throw error;
   }
 }
 
 module.exports = {
   getAllHabits,
+  getHabitsByCategory,
   getHabitById,
   createHabit,
   updateHabit,
   deleteHabit,
-  toggleHabitCompletion
+  incrementHabitStreak,
+  resetHabitStreak
 }; 

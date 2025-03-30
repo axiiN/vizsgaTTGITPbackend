@@ -21,6 +21,9 @@ try {
 // Import database initialization
 const { initializeDatabase, seedDatabase } = require('./db/initDb');
 
+// Import scheduler service
+const { initializeScheduler } = require('./utils/scheduleService');
+
 // Import routes
 const habitsRoutes = require('./routes/habits');
 const tasksRoutes = require('./routes/tasks');
@@ -86,6 +89,10 @@ async function startServer() {
       await seedDatabase();
       console.log('Development data seeded successfully');
     }
+
+    // Initialize the scheduler service
+    await initializeScheduler();
+    console.log('Scheduler service initialized successfully');
 
     // Start the server
     app.listen(PORT, () => {

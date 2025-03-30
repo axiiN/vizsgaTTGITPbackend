@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const taskModel = require('../models/taskModel');
 const { authenticate } = require('../middleware/auth');
+const { scheduleTaskDueReminder, cancelAllJobsForTask } = require('../utils/scheduleService');
+const admin = require('firebase-admin');
 
 // Apply authentication middleware to all routes
 router.use(authenticate);
@@ -84,6 +86,22 @@ router.post('/', async (req, res) => {
     const taskId = await taskModel.createTask(newTask, userId);
     const insertedTask = await taskModel.getTaskById(taskId, userId);
     
+    // Schedule due date reminder if task has a due date
+    if (insertedTask.dueDate) {
+      try {
+        const userRecord = await admin.auth().getUser(userId);
+        const userEmail = userRecord.email;
+        const userName = userRecord.displayName || '';
+        
+        if (userEmail) {
+          scheduleTaskDueReminder(taskId, insertedTask, userId, userEmail, userName);
+        }
+      } catch (reminderError) {
+        console.error('Error scheduling task due reminder:', reminderError);
+        // Continue with response even if reminder scheduling fails
+      }
+    }
+    
     res.status(201).json(insertedTask);
   } catch (error) {
     console.error('Error creating task:', error);
@@ -104,6 +122,11 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ message: 'Task not found' });
     }
     
+    // If due date or completion status is being updated, cancel any existing reminders
+    if (dueDate !== undefined || completed !== undefined) {
+      cancelAllJobsForTask(id);
+    }
+    
     // Update only provided fields
     const updates = {};
     if (name !== undefined) updates.name = name;
@@ -113,6 +136,23 @@ router.put('/:id', async (req, res) => {
     if (completed !== undefined) updates.completed = completed;
     
     const updatedTask = await taskModel.updateTask(id, updates, userId);
+    
+    // Reschedule due date reminder if task was updated with a new due date and isn't completed
+    if ((dueDate !== undefined || completed !== undefined) && updatedTask.dueDate && !updatedTask.completed) {
+      try {
+        const userRecord = await admin.auth().getUser(userId);
+        const userEmail = userRecord.email;
+        const userName = userRecord.displayName || '';
+        
+        if (userEmail) {
+          scheduleTaskDueReminder(id, updatedTask, userId, userEmail, userName);
+        }
+      } catch (reminderError) {
+        console.error('Error rescheduling task due reminder:', reminderError);
+        // Continue with response even if reminder scheduling fails
+      }
+    }
+    
     res.json(updatedTask);
   } catch (error) {
     console.error('Error updating task:', error);
@@ -132,6 +172,9 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ message: 'Task not found' });
     }
     
+    // Cancel any scheduled reminders for this task
+    cancelAllJobsForTask(id);
+    
     await taskModel.deleteTask(id, userId);
     res.status(204).send();
   } catch (error) {
@@ -149,6 +192,33 @@ router.patch('/:id/toggle', async (req, res) => {
     
     if (!updatedTask) {
       return res.status(404).json({ message: 'Task not found' });
+    }
+    
+    // If task is now completed, cancel any due reminders
+    // If it's uncompleted and has a future due date, reschedule the reminder
+    if (updatedTask.completed) {
+      cancelAllJobsForTask(id);
+    } else if (updatedTask.dueDate) {
+      const dueDate = new Date(updatedTask.dueDate);
+      const now = new Date();
+      // Only reschedule if due date is in the future
+      if (dueDate > now) {
+        try {
+          const userRecord = await admin.auth().getUser(userId);
+          const userEmail = userRecord.email;
+          const userName = userRecord.displayName || '';
+          
+          if (userEmail) {
+            // Cancel any existing reminders first
+            cancelAllJobsForTask(id);
+            // Then schedule new reminder
+            scheduleTaskDueReminder(id, updatedTask, userId, userEmail, userName);
+          }
+        } catch (reminderError) {
+          console.error('Error rescheduling task due reminder after toggle:', reminderError);
+          // Continue with response even if reminder scheduling fails
+        }
+      }
     }
     
     res.json(updatedTask);
